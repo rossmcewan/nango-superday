@@ -107,7 +107,8 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
         
         const parsedStartTime = parseDate(startTime, defaultStartTime);
         const parsedEndTime = parseDate(endTime, now);
-
+        console.log(startTime, parsedStartTime)
+        console.log(endTime, parsedEndTime);
         // Ensure start time is before end time
         if (parsedStartTime > parsedEndTime) {
           return reply.code(400).send({ error: 'startTime must be before endTime' });

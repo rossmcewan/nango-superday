@@ -1,0 +1,184 @@
+openapi: 3.0.0
+info:
+  title: API Metering Service
+  description: Service for logging and querying API usage with rate limiting and alerts
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+
+components:
+  schemas:
+    CreateUsageRequest:
+      type: object
+      required:
+        - accountId
+        - endpoint
+      properties:
+        accountId:
+          type: string
+          description: Unique identifier for the account
+          example: "account-123"
+        endpoint:
+          type: string
+          description: The API endpoint being accessed
+          example: "/api/users"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the API was accessed (defaults to current time if not provided)
+          example: "2024-03-20T10:00:00Z"
+    
+    CreateUsageResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: "success"
+    
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Internal server error"
+    
+    UsageStats:
+      type: object
+      properties:
+        timeBucket:
+          type: string
+          format: date-time
+          example: "2024-03-20T10:00:00Z"
+        count:
+          type: integer
+          description: Number of API calls in this time bucket
+          example: 42
+    
+    QueryUsageResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          example: "account-123"
+        endpoint:
+          type: string
+          example: "/api/users"
+        startTime:
+          type: string
+          format: date-time
+          example: "2024-03-20T00:00:00Z"
+        endTime:
+          type: string
+          format: date-time
+          example: "2024-03-20T23:59:59Z"
+        window:
+          type: string
+          enum: [minute, hour, day]
+          example: "hour"
+        usage:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageStats'
+
+paths:
+  /usage:
+    post:
+      summary: Log API usage
+      description: Records a single API usage event
+      operationId: createUsage
+      tags:
+        - Metering
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUsageRequest'
+      responses:
+        '201':
+          description: Usage recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUsageResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    get:
+      summary: Query API usage statistics
+      description: Retrieves aggregated API usage statistics for a specific account and endpoint
+      operationId: getUsageStats
+      tags:
+        - Metering
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Account ID to query usage for
+          example: "account-123"
+        - name: endpoint
+          in: query
+          required: true
+          schema:
+            type: string
+          description: API endpoint to query usage for
+          example: "/api/users"
+        - name: startTime
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Start of the time range (defaults to 24 hours ago)
+          example: "2024-03-20T00:00:00Z"
+        - name: endTime
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: End of the time range (defaults to current time)
+          example: "2024-03-20T23:59:59Z"
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [minute, hour, day]
+            default: hour
+          description: Aggregation window size
+          example: "hour"
+      responses:
+        '200':
+          description: Usage statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryUsageResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' 

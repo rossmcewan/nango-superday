@@ -27,9 +27,9 @@ export class PostgresMeteringService implements MeteringService {
       `
       WITH time_series AS (
         SELECT generate_series(
-          date_trunc($1, $4::timestamp),
-          date_trunc($1, $5::timestamp),
-          $6::interval
+          date_trunc($1, $4::timestamptz),
+          date_trunc($1, $5::timestamptz),
+          ($6)::interval
         ) as time_bucket
       )
       SELECT
