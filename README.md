@@ -128,13 +128,56 @@ The service is configured with a rate limit of 100 requests per second per accou
    - A Slack alert will be sent to the configured channel
    - The alert will be updated when the rate limit recovers
 
+## Rate Limiting
+
+The service implements a dual rate limiting system:
+
+1. **Global IP-based Rate Limiting**: Applied across all endpoints
+   - Limit: 1000 requests per minute per IP address
+   - No alerts are sent for IP-based rate limits
+
+2. **Account-based Rate Limiting**: Applied only to POST requests
+   - Limit: Configurable through environment variables
+   - Alerts are sent when limits are exceeded
+   - Duplicate alerts are prevented while an alert is active
+
+To test rate limiting:
+
+1. Send multiple requests in quick succession:
+   ```bash
+   for i in {1..150}; do
+     curl -X POST http://localhost:3000/api/v1/log \
+       -H "Content-Type: application/json" \
+       -d '{"accountId": "test", "endpoint": "/api/test"}' &
+   done
+   ```
+
+2. After exceeding the rate limit:
+   - You'll receive a 429 status code
+   - A Slack alert will be sent to the configured channel
+   - The alert will be updated when the rate limit recovers
+
+## Environment Variables
+
+Required environment variables:
+- NANGO_SLACK_CONNECTION_ID=your-slack-connection-id
+- NANGO_SLACK_PROVIDER_CONFIG_KEY=your-slack-provider-config-key
+
 ## Architecture
 
-- **FastifyJS**: High-performance web framework
-- **PostgreSQL**: Persistent storage for API usage data
-- **rate-limiter-flexible**: In-memory rate limiting
-- **Nango**: Slack integration for alerts
-- **Docker**: Containerized development environment
+The service consists of several key components:
+
+1. **API Endpoints**: Express routes for logging and querying usage
+2. **Rate Limiting**: Dual system with IP and account-based limits
+3. **Metering Service**: PostgreSQL-based implementation for tracking API usage
+   - Stores requests in the `api_requests` table
+   - Provides usage statistics and request history
+4. **Notification System**: 
+   - Slack integration using Nango
+   - Pre-built action for sending messages
+   - Custom integration for updating messages
+   - In-memory queue system to prevent race conditions
+   - Sequential message processing per topic
 
 ## Performance
 
