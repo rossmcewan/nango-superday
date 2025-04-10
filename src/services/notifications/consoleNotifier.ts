@@ -2,10 +2,8 @@ import { NotificationService } from './interfaces';
 import { randomUUID } from 'crypto';
 
 export class ConsoleNotificationService implements NotificationService {
-  async sendAlert(key: string): Promise<string> {
+  async sendAlert(key: string, message: string): Promise<string> {
     const messageId = randomUUID();
-    const message = `🚨 Rate limit exceeded for: ${key}`;
-    
     console.log(`[ALERT ${messageId}] ${message}`);
     return messageId;
   }

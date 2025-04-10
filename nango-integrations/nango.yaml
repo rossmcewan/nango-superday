@@ -1,0 +1,29 @@
+integrations:
+  slack:
+    actions:
+      update-message:
+        version: 1.0.0
+        description: |
+          An action that updates a message to a slack channel.
+        input: UpdateMessageInput
+        scopes:
+          - chat:write
+        output: UpdateMessageOutput
+        endpoint:
+          method: PUT
+          path: /messages
+          group: Messages
+
+models:
+  UpdateMessageInput:
+    ts: string
+    channel: string
+    text: string
+  UpdateMessageOutput:
+    ok: boolean
+    channel?: string | undefined
+    ts?: string | undefined
+    message?: string | undefined
+    warning?: string | undefined
+    error?: string | undefined
+    raw_json: string
