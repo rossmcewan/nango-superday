@@ -17,15 +17,32 @@ async function migrate() {
   });
 
   try {
-    // Read the schema file
+    // Read and execute the schema file
     const schema = fs.readFileSync(
       path.join(__dirname, 'schema.sql'),
       'utf8'
     );
-
-    // Execute the schema
     await pool.query(schema);
-    console.log('Migration completed successfully');
+    console.log('Schema applied successfully');
+
+    // Read and execute migration files in order
+    const migrationsDir = path.join(__dirname, 'migrations');
+    if (fs.existsSync(migrationsDir)) {
+      const migrationFiles = fs.readdirSync(migrationsDir)
+        .filter(file => file.endsWith('.sql'))
+        .sort(); // Ensures migrations run in order (001_, 002_, etc.)
+
+      for (const file of migrationFiles) {
+        const migration = fs.readFileSync(
+          path.join(migrationsDir, file),
+          'utf8'
+        );
+        await pool.query(migration);
+        console.log(`Migration ${file} applied successfully`);
+      }
+    }
+
+    console.log('All migrations completed successfully');
   } catch (error) {
     console.error('Migration failed:', error);
     process.exit(1);

@@ -7,6 +7,6 @@ export interface Alert {
 }
 
 export interface NotificationService {
-  sendAlert(accountId: string): Promise<string>;  // Returns messageId
+  sendAlert(key: string): Promise<string>;
   updateAlert(messageId: string, message: string): Promise<void>;
 } 

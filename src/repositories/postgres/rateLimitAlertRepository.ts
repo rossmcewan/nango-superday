@@ -6,18 +6,18 @@ export class PostgresRateLimitAlertRepository implements RateLimitAlertRepositor
 
   async create(alert: Omit<RateLimitAlert, 'id' | 'createdAt' | 'updatedAt'>): Promise<RateLimitAlert> {
     const result = await this.pool.query<RateLimitAlert>(
-      'INSERT INTO rate_limit_alerts (account_id, message_id, status) VALUES ($1, $2, $3) RETURNING *',
-      [alert.accountId, alert.messageId, alert.status]
+      'INSERT INTO rate_limit_alerts (key, message_id, status) VALUES ($1, $2, $3) RETURNING *',
+      [alert.key, alert.messageId, alert.status]
     );
     return this.mapRowToAlert(result.rows[0]);
   }
 
-  async findActiveByAccountId(accountId: string): Promise<RateLimitAlert[]> {
-    const result = await this.pool.query<RateLimitAlert>(
-      'SELECT * FROM rate_limit_alerts WHERE account_id = $1 AND status = $2',
-      [accountId, 'active']
+  async isActiveByKey(key: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'SELECT EXISTS(SELECT 1 FROM rate_limit_alerts WHERE key = $1 AND status = $2)',
+      [key, 'active']
     );
-    return result.rows.map(this.mapRowToAlert);
+    return result.rows[0].exists;
   }
 
   async updateStatus(id: number, status: 'active' | 'resolved'): Promise<void> {
@@ -27,10 +27,19 @@ export class PostgresRateLimitAlertRepository implements RateLimitAlertRepositor
     );
   }
 
+  async markRecovered(key: string): Promise<RateLimitAlert | null> {
+    const result = await this.pool.query<RateLimitAlert>(
+      'UPDATE rate_limit_alerts SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE key = $2 AND status = $3 RETURNING *',
+      ['resolved', key, 'active']
+    );
+
+    return result.rows.length > 0 ? this.mapRowToAlert(result.rows[0]) : null;
+  }
+
   private mapRowToAlert(row: any): RateLimitAlert {
     return {
       id: row.id,
-      accountId: row.account_id,
+      key: row.key,
       messageId: row.message_id,
       status: row.status,
       createdAt: new Date(row.created_at),

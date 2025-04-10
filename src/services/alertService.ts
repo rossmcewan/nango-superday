@@ -1,8 +1,12 @@
 import { RepositoryFactory } from '../repositories/factory';
 import { NotificationFactory } from './notifications/factory';
 
+type QueuedOperation = () => Promise<void>;
+
 export class AlertService {
   private static instance: AlertService;
+  private queues: Map<string, Promise<void>> = new Map();
+  
   private constructor() {}
 
   static getInstance(): AlertService {
@@ -12,47 +16,66 @@ export class AlertService {
     return this.instance;
   }
 
-  async sendRateLimitAlert(accountId: string): Promise<void> {
-    try {
-      // Check if there's an active alert for this account
-      const rateLimitAlertRepo = RepositoryFactory.getRateLimitAlertRepository();
-      const activeAlerts = await rateLimitAlertRepo.findActiveByAccountId(accountId);
+  private async enqueueOperation(key: string, operation: QueuedOperation): Promise<void> {
+    // Get the current promise chain for this key, or a resolved promise if none exists
+    const currentPromise = this.queues.get(key) || Promise.resolve();
 
-      if (activeAlerts.length === 0) {
-        // Send new alert
-        const notificationService = NotificationFactory.getNotificationService();
-        const messageId = await notificationService.sendAlert(accountId);
+    // Create a new promise chain that waits for the current one and then executes the new operation
+    const newPromise = currentPromise
+      .then(operation)
+      .catch(error => {
+        console.error(`Error in queued operation for key ${key}:`, error);
+      })
+      .finally(() => {
+        // Clean up the queue if this was the last operation
+        if (this.queues.get(key) === newPromise) {
+          this.queues.delete(key);
+        }
+      });
 
-        // Store alert record
-        await rateLimitAlertRepo.create({
-          accountId,
-          messageId,
-          status: 'active'
-        });
-      }
-    } catch (error) {
-      console.error('Failed to send rate limit alert:', error);
-    }
+    // Update the queue with the new promise chain
+    this.queues.set(key, newPromise);
+
+    // Wait for the operation to complete
+    await newPromise;
   }
 
-  async updateRateLimitRecovery(accountId: string): Promise<void> {
-    try {
-      const rateLimitAlertRepo = RepositoryFactory.getRateLimitAlertRepository();
-      const activeAlerts = await rateLimitAlertRepo.findActiveByAccountId(accountId);
+  async sendRateLimitAlert(key: string): Promise<void> {
+    await this.enqueueOperation(key, async () => {
+      try {
+        const rateLimitAlertRepo = RepositoryFactory.getRateLimitAlertRepository();
+        const hasActiveAlert = await rateLimitAlertRepo.isActiveByKey(key);
 
-      if (activeAlerts.length > 0) {
-        const alert = activeAlerts[0];
-        const message = `✅ Rate limit recovered for account: ${accountId}`;
+        if (!hasActiveAlert) {
+          const notificationService = NotificationFactory.getNotificationService();
+          const messageId = await notificationService.sendAlert(key);
 
-        // Update notification
-        const notificationService = NotificationFactory.getNotificationService();
-        await notificationService.updateAlert(alert.messageId, message);
-
-        // Update alert status
-        await rateLimitAlertRepo.updateStatus(alert.id, 'resolved');
+          await rateLimitAlertRepo.create({
+            key,
+            messageId,
+            status: 'active'
+          });
+        }
+      } catch (error) {
+        console.error('Failed to send rate limit alert:', error);
       }
-    } catch (error) {
-      console.error('Failed to update rate limit recovery:', error);
-    }
+    });
+  }
+
+  async updateRateLimitRecovery(key: string): Promise<void> {
+    await this.enqueueOperation(key, async () => {
+      try {
+        const rateLimitAlertRepo = RepositoryFactory.getRateLimitAlertRepository();
+        const recoveredAlert = await rateLimitAlertRepo.markRecovered(key);
+
+        if (recoveredAlert) {
+          const message = `✅ Rate limit recovered for: ${key}`;
+          const notificationService = NotificationFactory.getNotificationService();
+          await notificationService.updateAlert(recoveredAlert.messageId, message);
+        }
+      } catch (error) {
+        console.error('Failed to update rate limit recovery:', error);
+      }
+    });
   }
 } 

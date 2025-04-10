@@ -12,11 +12,11 @@ export class SlackNotificationService implements NotificationService {
     this.nango = new Nango({ 
       secretKey: process.env.NANGO_CLIENT_SECRET || ''
     });
-    this.channel = process.env.SLACK_CHANNEL || 'api-alerts';
+    this.channel = process.env.SLACK_CHANNEL || 'superday-ross';
   }
 
-  async sendAlert(accountId: string): Promise<string> {
-    const message = `🚨 Rate limit exceeded for account: ${accountId}`;
+  async sendAlert(key: string): Promise<string> {
+    const message = `🚨 Rate limit exceeded for: ${key}`;
     
     const response = await this.nango.post({
       endpoint: '/api/v1/slack/chat.postMessage',

@@ -7,6 +7,7 @@ import pool from './db';
 import { RepositoryFactory } from './repositories/factory';
 import { NotificationFactory } from './services/notifications/factory';
 import { NotificationType } from './services/notifications/types';
+import { AlertService } from './services/alertService';
 
 dotenv.config();
 
@@ -35,17 +36,16 @@ const start = async () => {
       origin: true
     });
 
-    // Register rate limiter plugin
+    // Register global IP-based rate limiter
     await server.register(rateLimit, {
       global: true,
-      max: 100,
-      timeWindow: 1000, // 1 minute in ms
-      allowList: [], // No IPs are exempt
-      skipOnError: false, // Don't skip rate limiting on errors
-      hook: 'preHandler', // Apply rate limiting in preHandler hook
-      redis: undefined, // Use in-memory storage
+      max: parseInt(process.env.IP_RATE_LIMIT || '100'),
+      timeWindow: 1000, // 1 second
+      skipOnError: false,
+      hook: 'preHandler',
+      redis: undefined,
       keyGenerator: function(request) {
-        return request.ip; // Use IP address as the key
+        return `ip:${request.ip}`;
       },
       enableDraftSpec: true,
       addHeaders: {
@@ -53,6 +53,17 @@ const start = async () => {
         'x-ratelimit-remaining': true,
         'x-ratelimit-reset': true,
         'retry-after': true
+      },
+      onExceeding: async function(req, key) {
+        await AlertService.getInstance().updateRateLimitRecovery(key);
+      },
+      onExceeded: async function(req, key) {
+        const rateLimitAlertRepo = RepositoryFactory.getRateLimitAlertRepository();
+        const hasActiveAlert = await rateLimitAlertRepo.isActiveByKey(key);
+        
+        if (!hasActiveAlert) {
+          await AlertService.getInstance().sendRateLimitAlert(key);
+        }
       }
     });
 
@@ -70,7 +81,9 @@ const start = async () => {
     });
 
     // Register routes
-    await server.register(meteringRoutes, { prefix: '/api/v1' });
+    await server.register(async function(fastify) {      
+      return fastify.register(meteringRoutes, { prefix: '/api/v1' });
+    });
 
     await server.listen({
       port: parseInt(process.env.PORT || '3000'),

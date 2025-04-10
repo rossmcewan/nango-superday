@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { RepositoryFactory } from '../repositories/factory';
+import { AlertService } from '../services/alertService';
 
 interface LogUsageBody {
   accountId: string;
@@ -37,7 +38,32 @@ export default async function (fastify: FastifyInstance) {
   const apiRequestRepo = RepositoryFactory.getApiRequestRepository();
 
   // Log API usage
-  fastify.post('/log', async (request: FastifyRequest<{ Body: LogUsageBody }>, reply: FastifyReply) => {
+  fastify.post('/log', {
+    config: {
+      rateLimit: {
+        max: parseInt(process.env.ACCOUNT_RATE_LIMIT || '100'),
+        timeWindow: 1000,
+        keyGenerator: function(request) {
+          const accountId = (request.body as any)?.accountId;
+          if (!accountId) {
+            throw new Error('Account ID is required for POST requests');
+          }
+          return `account:${accountId}`;
+        },
+        onExceeding: async function(req, key) {
+          await AlertService.getInstance().updateRateLimitRecovery(key);
+        },
+        onExceeded: async function(req, key) {
+          const rateLimitAlertRepo = RepositoryFactory.getRateLimitAlertRepository();
+          const hasActiveAlert = await rateLimitAlertRepo.isActiveByKey(key);
+          
+          if (!hasActiveAlert) {
+            await AlertService.getInstance().sendRateLimitAlert(key);
+          }
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: LogUsageBody }>, reply: FastifyReply) => {
     const { accountId, endpoint, timestamp } = request.body;
 
     try {
@@ -54,7 +80,11 @@ export default async function (fastify: FastifyInstance) {
   });
 
   // Query API usage
-  fastify.get('/usage', async (request: FastifyRequest<{ Querystring: QueryUsageParams }>, reply: FastifyReply) => {
+  fastify.get('/usage', {
+    config: {
+      rateLimit: false
+    }
+  }, async (request: FastifyRequest<{ Querystring: QueryUsageParams }>, reply: FastifyReply) => {
     const { accountId, endpoint, startTime, endTime, window = 'hour' } = request.query;
 
     if (!accountId || !endpoint) {

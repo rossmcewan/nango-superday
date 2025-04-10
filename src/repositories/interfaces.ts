@@ -8,7 +8,7 @@ export interface ApiRequest {
 
 export interface RateLimitAlert {
   id: number;
-  accountId: string;
+  key: string;
   messageId: string;
   status: 'active' | 'resolved';
   createdAt: Date;
@@ -34,6 +34,7 @@ export interface ApiRequestRepository {
 
 export interface RateLimitAlertRepository {
   create(alert: Omit<RateLimitAlert, 'id' | 'createdAt' | 'updatedAt'>): Promise<RateLimitAlert>;
-  findActiveByAccountId(accountId: string): Promise<RateLimitAlert[]>;
+  isActiveByKey(key: string): Promise<boolean>;
   updateStatus(id: number, status: 'active' | 'resolved'): Promise<void>;
+  markRecovered(key: string): Promise<RateLimitAlert | null>;
 } 
