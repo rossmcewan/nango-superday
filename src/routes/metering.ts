@@ -58,10 +58,12 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
           },
           onExceeding: async function(req, key) {
             const [_, value] = key.split(':');
+            req.log.warn({ accountId: value }, 'Account-based rate limit approaching threshold');
             await deps.alertService.updateRateLimitRecovery(value);
           },
           onExceeded: async function(req, key) {
             const [_, value] = key.split(':');
+            req.log.error({ accountId: value }, 'Account-based rate limit exceeded');
             await deps.alertService.sendRateLimitAlert(value);
           }
         }
@@ -76,8 +78,10 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
           timestamp: timestamp ? new Date(timestamp) : new Date()
         });
 
+        request.log.info({ accountId, endpoint, timestamp }, 'API usage logged successfully');
         return reply.code(201).send({ status: 'success' });
       } catch (error) {
+        request.log.error({ error, accountId, endpoint }, 'Failed to log API usage');
         return reply.code(500).send({ error: 'Internal server error' });
       }
     });
@@ -91,10 +95,12 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
       const { accountId, endpoint, startTime, endTime, window = 'hour' } = request.query;
 
       if (!accountId || !endpoint) {
+        request.log.warn({ accountId, endpoint }, 'Missing required query parameters');
         return reply.code(400).send({ error: 'accountId and endpoint are required' });
       }
 
       if (!isValidWindow(window)) {
+        request.log.warn({ window }, 'Invalid aggregation window specified');
         return reply.code(400).send({ 
           error: `Invalid window parameter. Must be one of: ${VALID_WINDOWS.join(', ')}` 
         });
@@ -107,10 +113,10 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
         
         const parsedStartTime = parseDate(startTime, defaultStartTime);
         const parsedEndTime = parseDate(endTime, now);
-        console.log(startTime, parsedStartTime)
-        console.log(endTime, parsedEndTime);
+
         // Ensure start time is before end time
         if (parsedStartTime > parsedEndTime) {
+          request.log.warn({ startTime, endTime }, 'Invalid time range: start time is after end time');
           return reply.code(400).send({ error: 'startTime must be before endTime' });
         }
 
@@ -120,6 +126,15 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
           { startTime: parsedStartTime, endTime: parsedEndTime },
           window
         );
+
+        request.log.info({ 
+          accountId, 
+          endpoint, 
+          window,
+          startTime: parsedStartTime,
+          endTime: parsedEndTime,
+          recordCount: usage.length 
+        }, 'Usage statistics retrieved successfully');
 
         return reply.send({
           accountId,
@@ -131,9 +146,10 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
         });
       } catch (error) {
         if (error instanceof Error && error.message.includes('Invalid date format')) {
+          request.log.warn({ error, startTime, endTime }, 'Invalid date format in query parameters');
           return reply.code(400).send({ error: error.message });
         }
-        console.error('Error fetching usage stats:', error);
+        request.log.error({ error, accountId, endpoint }, 'Error fetching usage stats');
         return reply.code(500).send({ error: 'Internal server error' });
       }
     });

@@ -9,6 +9,7 @@ import { NotificationFactory } from './services/notifications/factory';
 import { NotificationType } from './services/notifications/types';
 import { AlertFactory } from './services/alerts/factory';
 import { RepositoryFactory } from './repositories/factory';
+import logger from './utils/logger';
 
 dotenv.config();
 
@@ -35,13 +36,15 @@ NotificationFactory.initialize(
 const notificationService = NotificationFactory.getNotificationService();
 
 const server = fastify({
-  logger: true,
-  ajv: {
-    customOptions: {
-      removeAdditional: 'all',
-      coerceTypes: true,
-      useDefaults: true
-    }
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    transport: process.env.NODE_ENV !== 'production' ? {
+      target: 'pino-pretty',
+      options: {
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname',
+      }
+    } : undefined
   }
 });
 
@@ -73,10 +76,12 @@ const start = async () => {
       },
       onExceeding: async function(req, key) {
         const [_, value] = key.split(':');
+        logger.warn({ ip: value }, 'IP-based rate limit approaching threshold');
         await alertService.updateRateLimitRecovery(value);
       },
       onExceeded: async function(req, key) {
         const [_, value] = key.split(':');
+        logger.error({ ip: value }, 'IP-based rate limit exceeded');
         await alertService.sendRateLimitAlert(value);
       }
     });
@@ -84,6 +89,12 @@ const start = async () => {
     // Add error handler for rate limit errors
     server.setErrorHandler(function (error, request, reply) {
       if (error.statusCode === 429) {
+        logger.warn({ 
+          statusCode: 429,
+          path: request.url,
+          method: request.method,
+          ip: request.ip
+        }, 'Rate limit exceeded');
         reply.code(429).send({
           statusCode: 429,
           error: 'Too Many Requests',
@@ -91,6 +102,7 @@ const start = async () => {
         });
         return;
       }
+      logger.error(error, 'Unhandled error');
       reply.send(error);
     });
 
@@ -105,12 +117,13 @@ const start = async () => {
       return fastify.register(meteringRoutes, { prefix: '/api/v1' });
     });
 
-    await server.listen({
-      port: parseInt(process.env.PORT || '3000'),
-      host: '0.0.0.0'
-    });
+    const port = parseInt(process.env.PORT || '3000');
+    const host = process.env.HOST || 'localhost';
+    
+    await server.listen({ port, host });
+    logger.info({ port, host }, 'Server started successfully');
   } catch (err) {
-    server.log.error(err);
+    logger.error(err, 'Error starting server');
     process.exit(1);
   }
 };
