@@ -15,12 +15,12 @@ A metering API service that logs and queries API usage with rate limiting and Sl
    ```bash
    npm install
    ```
-3. Set up the development environment:
+3. Set up the environment:
    ```bash
-   # Copy development environment file
-   cp .env.dev .env
+   # Copy environment file
+   cp .env.example .env
    
-   # Update any values if needed
+   # Update the values in .env
    vim .env  # or use your preferred editor
    ```
 
@@ -76,7 +76,7 @@ npm run docker:clean
 ## Running without Docker
 
 1. Create a PostgreSQL database named `metering_api`
-2. Run database migrations:
+2. Create database schema:
    ```bash
    psql -U postgres -d metering_api -f src/db/schema.sql
    ```
@@ -89,6 +89,19 @@ npm run docker:clean
    npm run build
    npm start
    ```
+
+## API Documentation
+
+The API is documented using OpenAPI 3.0 specification in `openapi.yaml`. This provides:
+- Detailed endpoint descriptions
+- Request/response schemas
+- Example payloads
+- Authentication requirements
+
+You can view the API documentation by:
+1. Opening the `openapi.yaml` file in an OpenAPI viewer
+2. Using tools like Swagger UI or Redoc
+3. Importing into API development tools like Postman
 
 ## API Endpoints
 
@@ -112,116 +125,78 @@ curl "http://localhost:3000/api/v1/usage?accountId=123&endpoint=/api/users&start
 
 ## Testing Rate Limits
 
-The service is configured with a rate limit of 100 requests per second per account. To test rate limiting:
+The service is configured with rate limits that can be tested using the provided script:
 
-1. Send multiple requests in quick succession:
-   ```bash
-   for i in {1..150}; do
-     curl -X POST http://localhost:3000/api/v1/log \
-       -H "Content-Type: application/json" \
-       -d '{"accountId": "test", "endpoint": "/api/test"}' &
-   done
-   ```
+```bash
+npm run test-rate-limits
+```
 
-2. After exceeding the rate limit:
-   - You'll receive a 429 status code
-   - A Slack alert will be sent to the configured channel
-   - The alert will be updated when the rate limit recovers
+This script will:
+1. Send multiple requests to trigger the rate limit
+2. Demonstrate both IP-based and account-based rate limiting
+3. Show notification behavior when limits are exceeded
 
 ## Rate Limiting
 
 The service implements a dual rate limiting system:
 
 1. **Global IP-based Rate Limiting**: Applied across all endpoints
-   - Limit: 1000 requests per minute per IP address
-   - No alerts are sent for IP-based rate limits
+   - Limit: 100 requests per second per IP address (configurable)
+   - Alerts are sent when limits are exceeded
+   - Duplicate alerts are prevented while an alert is active
 
 2. **Account-based Rate Limiting**: Applied only to POST requests
    - Limit: Configurable through environment variables
    - Alerts are sent when limits are exceeded
    - Duplicate alerts are prevented while an alert is active
 
-To test rate limiting:
-
-1. Send multiple requests in quick succession:
-   ```bash
-   for i in {1..150}; do
-     curl -X POST http://localhost:3000/api/v1/log \
-       -H "Content-Type: application/json" \
-       -d '{"accountId": "test", "endpoint": "/api/test"}' &
-   done
-   ```
-
-2. After exceeding the rate limit:
-   - You'll receive a 429 status code
-   - A Slack alert will be sent to the configured channel
-   - The alert will be updated when the rate limit recovers
-
 ## Environment Variables
 
 Required environment variables:
-- NANGO_SLACK_CONNECTION_ID=your-slack-connection-id
-- NANGO_SLACK_PROVIDER_CONFIG_KEY=your-slack-provider-config-key
+```
+# Server Configuration
+PORT=3000
+
+# Database Configuration
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=metering_api
+
+# Rate Limiting
+RATE_LIMIT_POINTS=100
+RATE_LIMIT_DURATION=60
+
+# Notification Configuration
+NOTIFICATION_SERVICE=slack  # or 'console' for local development
+NANGO_CLIENT_ID=your-client-id
+NANGO_SECRET=your-secret
+NANGO_SLACK_CONNECTION_ID=your-slack-connection-id
+NANGO_SLACK_PROVIDER_CONFIG_KEY=your-slack-provider-config-key
+```
 
 ## Architecture
 
-The service consists of several key components:
+The service follows a modular architecture using the Factory pattern for dependency injection:
 
-1. **API Endpoints**: Express routes for logging and querying usage
-2. **Rate Limiting**: Dual system with IP and account-based limits
-3. **Metering Service**: PostgreSQL-based implementation for tracking API usage
-   - Stores requests in the `api_requests` table
-   - Provides usage statistics and request history
-4. **Notification System**: 
-   - Slack integration using Nango
-   - Pre-built action for sending messages
-   - Custom integration for updating messages
-   - In-memory queue system to prevent race conditions
-   - Sequential message processing per topic
+1. **API Layer**:
+   - Express routes for handling HTTP requests
+   - OpenAPI specification for API documentation
+   - Request validation and error handling
 
-## Performance
+2. **Services Layer**:
+   - Factory pattern for service instantiation
+   - Pluggable implementations for each service:
+     - Metering: PostgreSQL implementation
+     - Rate Limiting: Memory and PostgreSQL implementations
+     - Notifications: Console and Slack implementations
+     - Queue: In-memory implementation with sequential processing
 
-The service is designed to handle 100 req/s throughput with:
-- Efficient PostgreSQL indexing
-- In-memory rate limiting
-- Connection pooling
-- Optimized time-series queries
-
-## Development
-
-The project uses a repository pattern for data access, making it easy to:
-- Switch between different storage implementations
-- Test the application with mock repositories
-- Maintain consistent data access patterns
-- Keep business logic separate from data access
-
-### Environment Variables
-
-The development environment (`.env.dev`) includes:
-- Database connection details
-- Rate limiting configuration
-- Nango (Slack) integration settings
-- Application port settings
-
-You can override any of these values by editing your local `.env` file.
-
-### Project Structure
-
-```
-src/
-├── db/
-│   ├── index.ts           # Database connection
-│   └── schema.sql         # Database schema
-├── repositories/
-│   ├── interfaces.ts      # Repository interfaces
-│   ├── factory.ts         # Repository factory
-│   └── postgres/          # PostgreSQL implementations
-├── services/
-│   ├── rateLimiter.ts     # Rate limiting logic
-│   └── slackNotifier.ts   # Slack notifications
-└── routes/
-    └── metering.ts        # API routes
-```
+3. **Repository Layer**:
+   - Abstract interfaces for data access
+   - PostgreSQL implementations
+   - Factory pattern for repository creation
 
 ### Available Scripts
 
@@ -229,6 +204,7 @@ src/
 - `npm run build` - Build the TypeScript code
 - `npm run start` - Start the application in production mode
 - `npm test` - Run tests
+- `npm run test-rate-limits` - Test rate limiting functionality
 
 #### Docker Scripts
 - `npm run docker:db` - Start PostgreSQL container
