@@ -128,7 +128,7 @@ curl "http://localhost:3000/api/v1/usage?accountId=123&endpoint=/api/users&start
 The service is configured with rate limits that can be tested using the provided script:
 
 ```bash
-npm run test-rate-limits
+npm run test:rate-limits
 ```
 
 This script will:
@@ -204,7 +204,7 @@ The service follows a modular architecture using the Factory pattern for depende
 - `npm run build` - Build the TypeScript code
 - `npm run start` - Start the application in production mode
 - `npm test` - Run tests
-- `npm run test-rate-limits` - Test rate limiting functionality
+- `npm run test:rate-limits` - Test rate limiting functionality
 
 #### Docker Scripts
 - `npm run docker:db` - Start PostgreSQL container
