@@ -9,7 +9,6 @@ import { NotificationFactory } from './services/notifications/factory';
 import { NotificationType } from './services/notifications/types';
 import { AlertFactory } from './services/alerts/factory';
 import { RepositoryFactory } from './repositories/factory';
-import logger from './utils/logger';
 
 dotenv.config();
 
@@ -76,12 +75,12 @@ const start = async () => {
       },
       onExceeding: async function(req, key) {
         const [_, value] = key.split(':');
-        logger.warn({ ip: value }, 'IP-based rate limit approaching threshold');
+        req.log.warn({ ip: value }, 'IP-based rate limit approaching threshold');
         await alertService.updateRateLimitRecovery(value);
       },
       onExceeded: async function(req, key) {
         const [_, value] = key.split(':');
-        logger.error({ ip: value }, 'IP-based rate limit exceeded');
+        req.log.error({ ip: value }, 'IP-based rate limit exceeded');
         await alertService.sendRateLimitAlert(value);
       }
     });
@@ -89,7 +88,7 @@ const start = async () => {
     // Add error handler for rate limit errors
     server.setErrorHandler(function (error, request, reply) {
       if (error.statusCode === 429) {
-        logger.warn({ 
+        request.log.warn({ 
           statusCode: 429,
           path: request.url,
           method: request.method,
@@ -102,7 +101,7 @@ const start = async () => {
         });
         return;
       }
-      logger.error(error, 'Unhandled error');
+      request.log.error(error, 'Unhandled error');
       reply.send(error);
     });
 
@@ -121,15 +120,16 @@ const start = async () => {
     const host = process.env.HOST || 'localhost';
     
     await server.listen({ port, host });
-    logger.info({ port, host }, 'Server started successfully');
+    server.log.info({ port, host }, 'Server started successfully');
   } catch (err) {
-    logger.error(err, 'Error starting server');
+    server.log.error(err, 'Error starting server');
     process.exit(1);
   }
 };
 
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
+  server.log.info('Shutting down server...');
   await server.close();
   await pool.end();
   await alertService.shutdown();
