@@ -1,5 +1,5 @@
 import { Queue } from './interfaces';
-import { InMemoryQueue } from './inMemoryQueue';
+import { InMemoryQueue } from './impl/inMemoryQueue';
 
 export enum QueueType {
   InMemory = 'in-memory',

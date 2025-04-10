@@ -1,9 +1,10 @@
-import { RepositoryFactory } from '../repositories/factory';
-import { NotificationFactory } from './notifications/factory';
-import { QueueFactory } from './queue/factory';
-import { QueueMessage } from './queue/interfaces';
 
-export class AlertService {
+import { RepositoryFactory } from '../../../repositories/factory';
+import { NotificationFactory } from '../../notifications/factory';
+import { QueueFactory } from '../../queue/factory';
+import { QueueMessage } from '../../queue/interfaces';
+import { AlertService } from '../interfaces';
+export class DefaultAlertService {
   private static instance: AlertService;
   private unsubscribe?: () => void;
 
@@ -18,7 +19,7 @@ export class AlertService {
 
   static getInstance(): AlertService {
     if (!this.instance) {
-      this.instance = new AlertService();
+      this.instance = new DefaultAlertService();
     }
     return this.instance;
   }
@@ -32,7 +33,7 @@ export class AlertService {
         if (!hasActiveAlert) {
           const notificationService = NotificationFactory.getNotificationService();
           const alertMessage = `🚨 Rate limit exceeded for: ${message.key}`;
-          const messageId = await notificationService.sendAlert(message.key, alertMessage);
+          const messageId = await notificationService.send(alertMessage);
 
           await rateLimitAlertRepo.create({
             key: message.key,
@@ -45,7 +46,7 @@ export class AlertService {
         if (recoveredAlert) {
           const recoveryMessage = `✅ Rate limit recovered for: ${message.key}`;
           const notificationService = NotificationFactory.getNotificationService();
-          await notificationService.updateAlert(recoveredAlert.messageId, recoveryMessage);
+          await notificationService.update(recoveredAlert.messageId, recoveryMessage);
         }
       }
     } catch (error) {

@@ -1,27 +1,30 @@
-import { NotificationService } from './interfaces';
-import { SlackNotificationService } from './slackNotifier';
-import { ConsoleNotificationService } from './consoleNotifier';
 import { NotificationType } from './types';
+import { NotificationService } from './interfaces';
+import { SlackNotificationService } from './impl/SlackNotificationService';
+import { ConsoleNotificationService } from './impl/ConsoleNotificationService';
+
+interface SlackConfig {
+  secretKey: string;
+  providerConfigKey: string;
+  connectionId: string;
+  channel: string;
+}
 
 export class NotificationFactory {
-  private static notificationService: NotificationService;
+  private static instance: NotificationService;
 
-  static initialize(type: NotificationType = NotificationType.Console) {
-    switch (type) {
-      case NotificationType.Slack:
-        this.notificationService = new SlackNotificationService();
-        break;
-      case NotificationType.Console:
-      default:
-        this.notificationService = new ConsoleNotificationService();
-        break;
+  static initialize(type: NotificationType = NotificationType.Console, slackConfig?: SlackConfig): void {
+    if (type === NotificationType.Slack && slackConfig) {
+      this.instance = new SlackNotificationService(slackConfig);
+    } else {
+      this.instance = new ConsoleNotificationService();
     }
   }
 
   static getNotificationService(): NotificationService {
-    if (!this.notificationService) {
+    if (!this.instance) {
       this.initialize();
     }
-    return this.notificationService;
+    return this.instance;
   }
 } 

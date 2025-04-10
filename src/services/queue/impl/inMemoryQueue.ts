@@ -1,4 +1,4 @@
-import { Queue, QueueMessage } from './interfaces';
+import { Queue, QueueMessage } from '../interfaces';
 
 export class InMemoryQueue implements Queue {
   private queues: Map<string, QueueMessage[]> = new Map();

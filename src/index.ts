@@ -2,20 +2,37 @@ import fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import dotenv from 'dotenv';
-import meteringRoutes from './routes/metering';
+import createMeteringRoutes from './routes/metering';
 import pool from './db';
-import { RepositoryFactory } from './repositories/factory';
+import { PostgresMeteringService } from './services/metering/impl/PostgresMeteringService';
 import { NotificationFactory } from './services/notifications/factory';
 import { NotificationType } from './services/notifications/types';
-import { AlertService } from './services/alertService';
+import { AlertFactory } from './services/alerts/factory';
+import { RepositoryFactory } from './repositories/factory';
 
 dotenv.config();
 
 // Initialize repositories
 RepositoryFactory.initialize(pool);
 
-// Initialize notification service
-NotificationFactory.initialize(process.env.NOTIFICATION_SERVICE as NotificationType || NotificationType.Console);
+// Initialize services
+const meteringService = new PostgresMeteringService(pool);
+
+// Initialize alert service
+AlertFactory.initialize();
+const alertService = AlertFactory.getAlertService();
+
+// Initialize notification service based on configuration
+NotificationFactory.initialize(
+  process.env.NOTIFICATION_SERVICE as NotificationType,
+  process.env.NOTIFICATION_SERVICE === NotificationType.Slack ? {
+    secretKey: process.env.NANGO_CLIENT_SECRET || '',
+    providerConfigKey: process.env.NANGO_SLACK_PROVIDER_CONFIG_KEY || '',
+    connectionId: process.env.NANGO_SLACK_CONNECTION_ID || '',
+    channel: process.env.SLACK_CHANNEL || 'api-alerts'
+  } : undefined
+);
+const notificationService = NotificationFactory.getNotificationService();
 
 const server = fastify({
   logger: true,
@@ -39,7 +56,7 @@ const start = async () => {
     // Register global IP-based rate limiter
     await server.register(rateLimit, {
       global: true,
-      max: parseInt(process.env.IP_RATE_LIMIT || '100'),
+      max: parseInt(process.env.IP_RATE_LIMIT || '1000'),
       timeWindow: 1000, // 1 second
       skipOnError: false,
       hook: 'preHandler',
@@ -55,15 +72,12 @@ const start = async () => {
         'retry-after': true
       },
       onExceeding: async function(req, key) {
-        await AlertService.getInstance().updateRateLimitRecovery(key);
+        const [_, value] = key.split(':');
+        await alertService.updateRateLimitRecovery(value);
       },
       onExceeded: async function(req, key) {
-        const rateLimitAlertRepo = RepositoryFactory.getRateLimitAlertRepository();
-        const hasActiveAlert = await rateLimitAlertRepo.isActiveByKey(key);
-        
-        if (!hasActiveAlert) {
-          await AlertService.getInstance().sendRateLimitAlert(key);
-        }
+        const [_, value] = key.split(':');
+        await alertService.sendRateLimitAlert(value);
       }
     });
 
@@ -80,7 +94,13 @@ const start = async () => {
       reply.send(error);
     });
 
-    // Register routes
+    // Register routes with dependencies
+    const meteringRoutes = createMeteringRoutes({
+      meteringService,
+      alertService,
+      notificationService
+    });
+
     await server.register(async function(fastify) {      
       return fastify.register(meteringRoutes, { prefix: '/api/v1' });
     });
@@ -94,5 +114,13 @@ const start = async () => {
     process.exit(1);
   }
 };
+
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  await server.close();
+  await pool.end();
+  await alertService.shutdown();
+  process.exit(0);
+});
 
 start(); 

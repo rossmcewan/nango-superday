@@ -1,12 +1,10 @@
 export interface Alert {
-  id: number;
-  accountId: string;
-  messageId: string;  // Generic ID for the message in the notification system
+  key: string;
+  messageId: string;
   status: 'active' | 'resolved';
-  createdAt: Date;
 }
 
 export interface NotificationService {
-  sendAlert(key: string, message: string): Promise<string>;
-  updateAlert(messageId: string, message: string): Promise<void>;
+  send(message: string): Promise<string>;
+  update(messageId: string, message: string): Promise<void>;
 } 
