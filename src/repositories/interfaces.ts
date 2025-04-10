@@ -17,12 +17,6 @@ export interface RateLimitAlert {
 
 export interface ApiRequestRepository {
   create(request: Omit<ApiRequest, 'id' | 'createdAt'>): Promise<ApiRequest>;
-  findByAccountAndTimeRange(
-    accountId: string,
-    endpoint: string,
-    startTime: Date,
-    endTime: Date
-  ): Promise<ApiRequest[]>;
   getUsageStats(
     accountId: string,
     endpoint: string,
@@ -35,6 +29,5 @@ export interface ApiRequestRepository {
 export interface RateLimitAlertRepository {
   create(alert: Omit<RateLimitAlert, 'id' | 'createdAt' | 'updatedAt'>): Promise<RateLimitAlert>;
   isActiveByKey(key: string): Promise<boolean>;
-  updateStatus(id: number, status: 'active' | 'resolved'): Promise<void>;
   markRecovered(key: string): Promise<RateLimitAlert | null>;
 } 

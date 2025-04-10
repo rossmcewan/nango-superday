@@ -22,19 +22,6 @@ export class PostgresApiRequestRepository implements ApiRequestRepository {
     return this.mapRowToApiRequest(result.rows[0]);
   }
 
-  async findByAccountAndTimeRange(
-    accountId: string,
-    endpoint: string,
-    startTime: Date,
-    endTime: Date
-  ): Promise<ApiRequest[]> {
-    const result = await this.pool.query<ApiRequest>(
-      'SELECT * FROM api_requests WHERE account_id = $1 AND endpoint = $2 AND timestamp >= $3 AND timestamp <= $4',
-      [accountId, endpoint, startTime, endTime]
-    );
-    return result.rows.map(this.mapRowToApiRequest);
-  }
-
   async getUsageStats(
     accountId: string,
     endpoint: string,

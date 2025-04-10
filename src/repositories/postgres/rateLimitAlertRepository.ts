@@ -20,13 +20,6 @@ export class PostgresRateLimitAlertRepository implements RateLimitAlertRepositor
     return result.rows[0].exists;
   }
 
-  async updateStatus(id: number, status: 'active' | 'resolved'): Promise<void> {
-    await this.pool.query(
-      'UPDATE rate_limit_alerts SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [status, id]
-    );
-  }
-
   async markRecovered(key: string): Promise<RateLimitAlert | null> {
     const result = await this.pool.query<RateLimitAlert>(
       'UPDATE rate_limit_alerts SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE key = $2 AND status = $3 RETURNING *',
