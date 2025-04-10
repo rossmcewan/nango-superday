@@ -9,20 +9,31 @@ export interface ApiRequest {
 export interface RateLimitAlert {
   id: number;
   accountId: string;
-  slackMessageTs: string | null;
-  status: string;
+  messageId: string;
+  status: 'active' | 'resolved';
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface ApiRequestRepository {
   create(request: Omit<ApiRequest, 'id' | 'createdAt'>): Promise<ApiRequest>;
-  findByAccountAndTimeRange(accountId: string, endpoint: string, startTime: Date, endTime: Date): Promise<ApiRequest[]>;
-  getUsageStats(accountId: string, endpoint: string, startTime: Date, endTime: Date, window: string): Promise<Array<{ timeBucket: Date; count: number }>>;
+  findByAccountAndTimeRange(
+    accountId: string,
+    endpoint: string,
+    startTime: Date,
+    endTime: Date
+  ): Promise<ApiRequest[]>;
+  getUsageStats(
+    accountId: string,
+    endpoint: string,
+    startTime: Date,
+    endTime: Date,
+    window: string
+  ): Promise<Array<{ timeBucket: Date; count: number }>>;
 }
 
 export interface RateLimitAlertRepository {
   create(alert: Omit<RateLimitAlert, 'id' | 'createdAt' | 'updatedAt'>): Promise<RateLimitAlert>;
   findActiveByAccountId(accountId: string): Promise<RateLimitAlert[]>;
-  updateStatus(id: number, status: string): Promise<void>;
+  updateStatus(id: number, status: 'active' | 'resolved'): Promise<void>;
 } 

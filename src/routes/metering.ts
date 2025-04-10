@@ -1,6 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { checkRateLimit } from '../services/rateLimiter';
-import { sendRateLimitAlert, updateRateLimitRecovery } from '../services/slackNotifier';
 import { RepositoryFactory } from '../repositories/factory';
 
 interface LogUsageBody {
@@ -42,22 +40,12 @@ export default async function (fastify: FastifyInstance) {
   fastify.post('/log', async (request: FastifyRequest<{ Body: LogUsageBody }>, reply: FastifyReply) => {
     const { accountId, endpoint, timestamp } = request.body;
 
-    // Check rate limit
-    const isAllowed = await checkRateLimit(accountId);
-    if (!isAllowed) {
-      await sendRateLimitAlert(accountId);
-      return reply.code(429).send({ error: 'Rate limit exceeded' });
-    }
-
     try {
       await apiRequestRepo.create({
         accountId,
         endpoint,
         timestamp: timestamp ? new Date(timestamp) : new Date()
       });
-
-      // Check if we need to update rate limit recovery
-      await updateRateLimitRecovery(accountId);
 
       return reply.code(201).send({ status: 'success' });
     } catch (error) {
@@ -109,10 +97,10 @@ export default async function (fastify: FastifyInstance) {
         usage
       });
     } catch (error) {
-      console.error('Error fetching usage stats:', error);
       if (error instanceof Error && error.message.includes('Invalid date format')) {
         return reply.code(400).send({ error: error.message });
       }
+      console.error('Error fetching usage stats:', error);
       return reply.code(500).send({ error: 'Internal server error' });
     }
   });
