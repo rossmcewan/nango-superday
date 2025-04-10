@@ -30,7 +30,7 @@ async function sleep(ms: number) {
 
 async function makeRequest(requestNumber: number): Promise<void> {
   try {
-    const response = await axios.post(`${API_URL}/log`, {
+    const response = await axios.post(`${API_URL}/usage`, {
       accountId: TEST_ACCOUNT_ID,
       endpoint: TEST_ENDPOINT,
       timestamp: new Date().toISOString()
@@ -89,7 +89,7 @@ async function validateRateLimitHeaders() {
   console.log(chalk.cyan('\n=== Validating Rate Limit Headers ==='));
   
   try {
-    const response = await axios.post(`${API_URL}/log`, {
+    const response = await axios.post(`${API_URL}/usage`, {
       accountId: TEST_ACCOUNT_ID,
       endpoint: TEST_ENDPOINT,
       timestamp: new Date().toISOString()

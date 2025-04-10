@@ -3,7 +3,7 @@ import { MeteringService } from '../services/metering/interfaces';
 import { AlertService } from '../services/alerts/interfaces';
 import { NotificationService } from '../services/notifications/interfaces';
 
-interface LogUsageBody {
+interface CreateUsageBody {
   accountId: string;
   endpoint: string;
   timestamp?: string;
@@ -44,7 +44,7 @@ interface MeteringRoutesDeps {
 export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
   return async function registerRoutes(fastify: FastifyInstance) {
     // Log API usage
-    fastify.post('/log', {
+    fastify.post('/usage', {
       config: {
         rateLimit: {
           max: parseInt(process.env.ACCOUNT_RATE_LIMIT || '100'),
@@ -66,7 +66,7 @@ export default function createMeteringRoutes(deps: MeteringRoutesDeps) {
           }
         }
       }
-    }, async (request: FastifyRequest<{ Body: LogUsageBody }>, reply: FastifyReply) => {
+    }, async (request: FastifyRequest<{ Body: CreateUsageBody }>, reply: FastifyReply) => {
       const { accountId, endpoint, timestamp } = request.body;
 
       try {
